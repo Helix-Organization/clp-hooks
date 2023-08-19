@@ -14,12 +14,29 @@
             2: withdraw         \
             3: swap             \
     */ \
-    ((memo)[0] == 'D' ? DEPOSIT_TRANSACTION :  \
-     (memo)[0] == 'W' ? WITHDRAW_TRANSACTION : \
-     (memo)[0] == 'S' ? SWAP_TRANSACTION :     \
-     0)
+    (memo)[0] == 'D' ? DEPOSIT_TRANSACTION :  \
+    (memo)[0] == 'W' ? WITHDRAW_TRANSACTION : \
+    (memo)[0] == 'S' ? SWAP_TRANSACTION :     \
+    0
 
-#define DETERMINE_CURRENCY(currency) \
+
+#define TOKEN_A "TokenA.A's_issuer_address"
+#define TOKEN_B "TokenB.B's_issuer_address"
+
+#define DETERMINE_CURRENCY(token) \
+    /* \
+        Args:                       \
+            currency: uint8_t*      \
+        Return:                     \
+            int                     \
+            1: token A              \
+            2: token B              \
+            0: error                \
+    */ \
+    token == TOKEN_A ? 1 : \
+    token == TOKEN_B ? 2 : \
+    0
+
 
 // Macros for Liquidity Pool
 
