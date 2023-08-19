@@ -1,7 +1,6 @@
-#include "extern.h"
-#include "macro.h"
-#include "sfcodes.h"
+#include "hookapi.h"
 #include "constants.h"
+#include "macros.h"
 #include "deposit.h"
 
 void handle_deposit(uint8_t* memo, int64_t memo_len) {
@@ -13,24 +12,24 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
 
     // Check if the deposited currency is one of the accepted token pairs
     if (!is_accepted_currency(currency)) {
-        rollback(SBUF("Unsupported currency for deposit"), 1);
+        rollback(SBUF("Error: Unsupported currency for deposit"), 1);
         return;
     }
 
     // Get price range for the token pair
-    int64_t price_range = determine_price_range(memo, memo_len);
+    uint8_t price_range_id = memo[1];
     
     // Verify price range is valid
-    if (price_range < 0) {
-        rollback(SBUF("Invalid price range provided"), 1);
+    if (price_range_id < 0) {
+        rollback(SBUF("Error: Invalid price range provided"), 1);
         return;
     }
 
     // Add liquidity to the pool at the given price range
-    add_liquidity_to_range(currency, amount, price_range);
+    ADD_LIQUIDITY_FOR_RANGE(currency, price_range_id, amount);
 
     // Calculate LP tokens to be issued
-    int64_t lp_tokens = calculate_lp_tokens(currency, amount, price_range);
+    int64_t lp_tokens = calculate_lp_tokens(currency, price_range_id, amount);
 
     // Issue LP tokens to the user
     emit_lp_tokens(lp_tokens);
@@ -41,15 +40,6 @@ int is_accepted_currency(uint8_t* currency) {
         return 1;
     }
     return 0;
-}
-
-int64_t determine_price_range(uint8_t* memo, int64_t memo_len) {
-    // Placeholder logic to get the price range from the memo
-    // Adjust based on how you encode the price range in the memo
-    if (memo[1] == '1') return 10; // price range 10~11
-    if (memo[1] == '2') return 11; // price range 11~12
-    // ... add more price ranges as needed
-    return -1; // invalid price range
 }
 
 void add_liquidity_to_range(uint8_t* currency, int64_t amount, int64_t price_range) {
