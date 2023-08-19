@@ -30,12 +30,12 @@
         uint64_t liquidity; \
         /* Get current liquidity */ \
         if (state(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
-            rollback(SBUF("Error: could not read liquidity state"), 1); \
+            rollback(SBUF("Error: Could not read liquidity state"), 1); \
         } \
         /* Add new liquidity and store it to state */ \
         liquidity += amount; \
         if (state_set(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
-            rollback(SBUF("Error: could not store liquidity state!"), 1); \
+            rollback(SBUF("Error: Could not store liquidity state!"), 1); \
         } \
     } while(0)
 
@@ -53,14 +53,14 @@
         uint64_t liquidity; \
         /* Get current liquidity */ \
         if (state(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
-            rollback(SBUF("Error: could not read liquidity state"), 1); \
+            rollback(SBUF("Error: Could not read liquidity state"), 1); \
         } \
         /* Add new liquidity and store it to state */ \
         if (liquidity < amount) { \
-            rollback(SBUF("Error: not enough liquidity!"), 1); \
+            rollback(SBUF("Error: Not enough liquidity!"), 1); \
         } \
         liquidity -= amount; \
         if (state_set(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
-            rollback(SBUF("Error: could not store liquidity state!"), 1); \
+            rollback(SBUF("Error: Could not store liquidity state!"), 1); \
         } \
     } while(0)
