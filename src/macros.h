@@ -11,3 +11,56 @@
      0)
 
 
+// Macros for Liquidity Pool
+
+#define TOKEN_A_KEY 0x01U
+#define TOKEN_B_KEY 0x02U
+
+#define ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount) \
+    /* \
+        Args:                         \
+            currency_id: uint8_t      \
+            price_range_id: uint8_t  \
+            amount: int64_t           \
+    */ \
+    do { \
+        uint8_t key[32] = {0}; \
+        key[0] = currency_id; \
+        key[1] = price_range_id; \
+        uint64_t liquidity; \
+        /* Get current liquidity */ \
+        if (state(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
+            rollback(SBUF("Error: could not read liquidity state"), 1); \
+        } \
+        /* Add new liquidity and store it to state */ \
+        liquidity += amount; \
+        if (state_set(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
+            rollback(SBUF("Error: could not store liquidity state!"), 1); \
+        } \
+    } while(0)
+
+#define REMOVE_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount) \
+    /* \
+        Args:                         \
+            currency_id: uint8_t      \
+            price_range_id: uint8_t  \
+            amount: int64_t           \
+    */ \
+    do { \
+        uint8_t key[32] = {0}; \
+        key[0] = currency_id; \
+        key[1] = price_range_id; \
+        uint64_t liquidity; \
+        /* Get current liquidity */ \
+        if (state(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
+            rollback(SBUF("Error: could not read liquidity state"), 1); \
+        } \
+        /* Add new liquidity and store it to state */ \
+        if (liquidity < amount) { \
+            rollback(SBUF("Error: not enough liquidity!"), 1); \
+        } \
+        liquidity -= amount; \
+        if (state_set(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) { \
+            rollback(SBUF("Error: could not store liquidity state!"), 1); \
+        } \
+    } while(0)
