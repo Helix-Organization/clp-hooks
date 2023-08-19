@@ -2,7 +2,6 @@
 #include "sfcodes.h"
 #include "error.h"
 #include "constants.h"
-#include "utils.h"
 #include "deposit.h"
 #include "withdraw.h"
 #include "swap.h"
