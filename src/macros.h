@@ -5,11 +5,21 @@
 #define SWAP_TRANSACTION       3
 
 #define GET_TRANSACTION_TYPE_FROM_MEMO(memo)   \
+    /* \
+        Args:                   \
+            memo: uint8_t*      \
+        Return:                 \
+            int                 \
+            1: deposit          \
+            2: withdraw         \
+            3: swap             \
+    */ \
     ((memo)[0] == 'D' ? DEPOSIT_TRANSACTION :  \
      (memo)[0] == 'W' ? WITHDRAW_TRANSACTION : \
      (memo)[0] == 'S' ? SWAP_TRANSACTION :     \
      0)
 
+#define DETERMINE_CURRENCY(currency) \
 
 // Macros for Liquidity Pool
 
@@ -18,10 +28,12 @@
 
 #define ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount) \
     /* \
-        Args:                         \
-            currency_id: uint8_t      \
-            price_range_id: uint8_t  \
-            amount: int64_t           \
+        Args:                            \
+            currency_id: uint8_t         \
+            price_range_id: uint8_t      \
+            amount: int64_t              \
+        Return:
+            void
     */ \
     do { \
         uint8_t key[32] = {0}; \
@@ -41,10 +53,12 @@
 
 #define REMOVE_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount) \
     /* \
-        Args:                         \
-            currency_id: uint8_t      \
-            price_range_id: uint8_t  \
-            amount: int64_t           \
+        Args:                            \
+            currency_id: uint8_t         \
+            price_range_id: uint8_t      \
+            amount: int64_t              \
+        Return:
+            void
     */ \
     do { \
         uint8_t key[32] = {0}; \
