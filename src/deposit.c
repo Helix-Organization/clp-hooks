@@ -10,11 +10,8 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
     otxn_field(SBUF(currency), sfAmount);
     // should be tested what will currency be
 
-    // Check if the deposited currency is one of the accepted token pairs
-    if (!is_accepted_currency(currency)) {
-        rollback(SBUF("Error: Unsupported currency for deposit"), 1);
-        return;
-    }
+    // Determine the token id of the incoming deposit
+    uint8_t token_id = DETERMINE_CURRENCY(currency);
 
     // Get price range for the token pair
     uint8_t price_range_id = memo[1];
@@ -26,27 +23,13 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
     }
 
     // Add liquidity to the pool at the given price range
-    ADD_LIQUIDITY_FOR_RANGE(currency, price_range_id, amount);
+    ADD_LIQUIDITY_FOR_RANGE(token_id, price_range_id, amount);
 
     // Calculate LP tokens to be issued
-    int64_t lp_tokens = calculate_lp_tokens(currency, price_range_id, amount);
+    int64_t lp_tokens = calculate_lp_tokens(token_id, price_range_id, amount);
 
     // Issue LP tokens to the user
     emit_lp_tokens(lp_tokens);
-}
-
-int is_accepted_currency(uint8_t* currency) {
-    if (strcmp(currency, TOKEN_A) == 0 || strcmp(currency, TOKEN_B) == 0) {
-        return 1;
-    }
-    return 0;
-}
-
-void add_liquidity_to_range(uint8_t* currency, int64_t amount, int64_t price_range) {
-    // Logic to add liquidity to the pool at the given price range
-    // This will involve updating the state of the pool for the price range
-    // and adjusting the total liquidity for that range.
-    // ...
 }
 
 int64_t calculate_lp_tokens(uint8_t* currency, int64_t amount, int64_t price_range) {
