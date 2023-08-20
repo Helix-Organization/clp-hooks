@@ -26,23 +26,9 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
     ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount);
 
     // Calculate LP tokens to be issued
-    int64_t lp_tokens = calculate_lp_tokens(token_id, price_range_id, amount);
+    uint64_t lp_token_amount = CALCULATE_LP_TOKEN(currency_id, price_range_id, amount);
 
     // Issue LP tokens to the user
-    emit_lp_tokens(lp_tokens);
+    EMIT_LP_TOKEN(price_range_id, lp_token_amount);
 }
 
-int64_t calculate_lp_tokens(uint8_t* currency, int64_t amount, int64_t price_range) {
-    // Logic to calculate the number of LP tokens to be issued based on the
-    // amount of liquidity provided and the current total liquidity in the price range.
-    // This might involve a pro-rata calculation.
-    // Placeholder logic:
-    int64_t total_liquidity_in_range = get_total_liquidity_in_range(price_range);
-    return (amount * 1000) / total_liquidity_in_range; // adjust formula as needed
-}
-
-void emit_lp_tokens(int64_t lp_tokens) {
-    // Logic to emit LP tokens to the user
-    // This can be done using the `emit` function as shown in the examples
-    // ...
-}

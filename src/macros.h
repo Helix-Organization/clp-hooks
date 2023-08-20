@@ -95,3 +95,47 @@
             rollback(SBUF("Error: Could not store liquidity state!"), 1); \
         } \
     } while(0)
+
+// LP Token Macros
+#define CALCULATE_LP_TOKEN(currency_id, price_range_id, amount) \
+    /* \
+        Args:                            \
+            currency_id: uint8_t         \
+            price_range_id: uint8_t      \
+            amount: int64_t              \
+        Return:                          \
+            int64_t                      \
+    */ \
+    ({ \
+        uint8_t key[32] = {0}; \
+        key[0] = currency_id; \
+        key[1] = price_range_id; \
+        uint64_t total_liquidity; \
+        /* Get current liquidity */ \
+        if (state(SBUF(total_liquidity), SBUF(key)) != sizeof(total_liquidity)) { \
+            rollback(SBUF("Error: Could not read liquidity state"), 1); \
+        } \
+        /* Calculate LP tokens */ \
+        (amount * 1000) / total_liquidity; \
+    })
+
+#define LP_TOKEN_CURRENCY "LP_token_symbol+price_range_id"
+#define LP_TOKEN_ISSUER "LP_token_issuer_address"
+
+#define EMIT_LP_TOKEN(price_range_id, lp_token_amount) \
+    do { \
+        uint8_t emithash[32]; \
+        uint8_t amt_out[49]; \
+        uint8_t *amt_out_ptr = amt_out; \
+        if (float_sto(SBUF(amt_out), SBUF(LP_TOKEN_CURRENCY), SBUF(LP_TOKEN_ISSUER), float_set(-6, lp_token_amount), amAMOUNT) < 0) { \
+            rollback(SBUF("Error: Could not dump LP token amount into sto"), NOT_AN_AMOUNT); \
+            break; \
+        } \
+        uint8_t tx[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE]; \
+        PREPARE_PAYMENT_SIMPLE_TRUSTLINE(tx, (amt_out_ptr + 1), otxn_sender(), 20 + price_range_id, 0); \
+        int64_t e = emit(SBUF(emithash), SBUF(tx)); \
+        if (e < 0) { \
+            rollback(SBUF("Error: Failed to emit LP token!"), e); \
+            break; \
+        } \
+    } while(0)
