@@ -11,7 +11,7 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
     // should be tested what will currency be
 
     // Determine the token id of the incoming deposit
-    uint8_t token_id = DETERMINE_CURRENCY(currency);
+    uint8_t currency_id = DETERMINE_CURRENCY(currency);
 
     // Get price range for the token pair
     uint8_t price_range_id = memo[1];
@@ -23,7 +23,7 @@ void handle_deposit(uint8_t* memo, int64_t memo_len) {
     }
 
     // Add liquidity to the pool at the given price range
-    ADD_LIQUIDITY_FOR_RANGE(token_id, price_range_id, amount);
+    ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount);
 
     // Calculate LP tokens to be issued
     int64_t lp_tokens = calculate_lp_tokens(token_id, price_range_id, amount);
