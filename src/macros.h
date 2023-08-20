@@ -49,8 +49,8 @@
             currency_id: uint8_t         \
             price_range_id: uint8_t      \
             amount: int64_t              \
-        Return:
-            void
+        Return:                          \
+            void                         \
     */ \
     do { \
         uint8_t key[32] = {0}; \
@@ -74,8 +74,8 @@
             currency_id: uint8_t         \
             price_range_id: uint8_t      \
             amount: int64_t              \
-        Return:
-            void
+        Return:                          \
+            void                         \
     */ \
     do { \
         uint8_t key[32] = {0}; \
@@ -99,12 +99,14 @@
 // LP Token Macros
 #define CALCULATE_LP_TOKEN(currency_id, price_range_id, amount) \
     /* \
-        Args:                            \
-            currency_id: uint8_t         \
-            price_range_id: uint8_t      \
-            amount: int64_t              \
-        Return:                          \
-            int64_t                      \
+        Description:                                          \
+            Calculates the amount of LP tokens to be emitted. \
+        Args:                                                 \
+            currency_id: uint8_t                              \
+            price_range_id: uint8_t                           \
+            amount: int64_t                                   \
+        Return:                                               \
+            int64_t                                           \
     */ \
     ({ \
         uint8_t key[32] = {0}; \
@@ -123,6 +125,15 @@
 #define LP_TOKEN_ISSUER "LP_token_issuer_address"
 
 #define EMIT_LP_TOKEN(price_range_id, lp_token_amount) \
+    /* \
+        Description:                                                                          \
+            Emits LP tokens to the sender of the deposit transaction.                         \
+        Args:                                                                                 \
+            price_range_id: uint8_t (Price range ID representing the specific liquidity pool) \
+            lp_token_amount: int64_t (Amount of LP tokens to be emitted)                      \
+        Return:                                                                               \
+            void                                                                              \
+    */ \
     do { \
         uint8_t emithash[32]; \
         uint8_t amt_out[49]; \
