@@ -89,6 +89,8 @@
 
 int64_t hook(uint32_t reserved ) {
 
+    etxn_reserve(1);
+
     uint8_t otxn_accid[20];
     int32_t otxn_accid_len = otxn_field(SBUF(otxn_accid), sfAccount);
 
@@ -184,16 +186,14 @@ int64_t hook(uint32_t reserved ) {
             uint8_t emithash[32];
             uint8_t amt_out[49];
             uint8_t *amt_out_ptr = amt_out;
-            // 7a3919b52247c49bbad9f97737a1db6513a6f70f37603af84f
-            uint8_t lp_token_issuer[20] = { 0x7a, 0x39, 0x19, 0xb5, 0x22, 0x47, 0xc4, 0x9b, 0xba, 0xd9, 0xf9, 0x77, 0x37, 0xa1, 0xdb, 0x65, 0x13, 0xa6, 0xf7, 0x0f };
-            if (float_sto(SBUF(amt_out), SBUF(currencies[1]), SBUF(lp_token_issuer), float_set(-6, 1), amAMOUNT) < 0) {
+
+            if (float_sto(SBUF(amt_out), SBUF(currencies[1]), SBUF(hook_accid), float_set(-6, lp_token_amount), amAMOUNT) < 0) {
                 rollback(SBUF("Error: Could not dump LP token amount into sto"), NOT_AN_AMOUNT); \
                 break;
             }
             uint8_t txn_out[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
 
-            etxn_reserve(1);
-            PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, amt_out, otxn_accid, 0, 0);
+            PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, (amt_out_ptr + 1), otxn_accid, 0, 0);
             int64_t e = emit(SBUF(emithash), SBUF(txn_out));
             if (e < 0) {
                 rollback(SBUF("Error: Failed to emit LP token!"), e);
