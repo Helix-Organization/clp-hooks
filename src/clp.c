@@ -30,65 +30,124 @@
 #define ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount)           \
   /*                                                                           \
       Args:                                                                    \
-          currency_id: uint8_t                                                 \
-          price_range_id: uint8_t                                              \
+          currency_id: uint8_t*                                                \
+          price_range_id: uint8_t*                                             \
           amount: int64_t                                                      \
       Return:                                                                  \
           void                                                                 \
   */                                                                           \
-  do {                                                                         \
-    uint8_t key[32] = {0};                                                     \
-    key[0] = currency_id;                                                      \
-    key[1] = price_range_id;                                                   \
-    uint64_t liquidity;                                                        \
-    /* Get current liquidity */                                                \
-    if (state(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) {              \
-      rollback(SBUF("Error: Could not read liquidity state"), 1);              \
-    }                                                                          \
-    /* Add new liquidity and store it to state */                              \
-    liquidity += amount;                                                       \
-    if (state_set(SBUF(liquidity), SBUF(key)) != sizeof(liquidity)) {          \
-      rollback(SBUF("Error: Could not store liquidity state!"), 1);            \
-    }                                                                          \
-  } while (0)
+  uint8_t key[32] = {0};                                                       \
+  key[0] = currency_id;                                                        \
+  key[1] = price_range_id;                                                     \
+  int64_t liquidity;                                                           \
+  char liquidity_buf[8];                                                       \
+  /* Get current liquidity */                                                  \
+  if (state(SBUF(liquidity_buf), SBUF(key)) != sizeof(liquidity)) {            \
+    liquidity = 0;                                                             \
+  } else {                                                                     \
+    liquidity = INT64_FROM_BUF(liquidity_buf);                                 \
+  }                                \
+  liquidity = 0; \
+  /* Add new liquidity and store it to state */                                \
+  liquidity += amount;                                                         \
+  INT64_TO_BUF(liquidity_buf, liquidity);                                      \
+  if (state_set(SBUF(liquidity_buf), SBUF(key)) != sizeof(liquidity)) {        \
+    rollback(SBUF("Error: Could not store liquidity state!"), 1);              \
+  }
 
-#define DETERMINE_CURRENCY(token)                                              \
+#define CHECK_PRICE_RATE(price_rate, price_range_id)                           \
   /*                                                                           \
       Args:                                                                    \
-          currency: uint8_t*                                                   \
+          memo: uint8_t*                                                       \
+          price_range_id: uint8_t                                              \
       Return:                                                                  \
-          int                                                                  \
-          1: token A                                                           \
-          2: token B                                                           \
-          0: error                                                             \
+          int64_t                                                              \
+          price_rate                                                           \
   */                                                                           \
-  (token) == TOKEN_A ? 1 : (token) == TOKEN_B ? 2 : 0
-
-#define HANDLE_DEPOSIT(memo, memo_len)                                         \
-  do {                                                                         \
-    int64_t _amount = otxn_amount();                                           \
-    uint8_t _currency[20];                                                     \
-    otxn_field(SBUF(_currency), sfAmount);                                     \
-                                                                               \
-    uint8_t _currency_id = DETERMINE_CURRENCY(_currency);                      \
-                                                                               \
-    uint8_t _price_range_id = (memo)[1];                                       \
-    if (_price_range_id < 0) {                                                 \
-      rollback(SBUF("Error: Invalid price range provided"), 1);                \
-      return;                                                                  \
+  price_rate = float_set(-6, price_rate);                                      \
+  int64_t price_range = (uint32_t)(price_range_id);                            \
+  int64_t tmp_price_rate = price_rate;                                         \
+  if (price_range < 127) {                                                     \
+    tmp_price_rate = float_invert(tmp_price_rate);                             \
+    price_range = 127 - price_range;                                           \
+  } else {                                                                     \
+    price_range = price_range - 127;                                           \
+  }                                                                            \
+  int64_t price_rate_err;                                                      \
+  if (price_range == 0) {                                                      \
+    if (float_compare(price_rate, float_one(), COMPARE_EQUAL) == 0) {          \
+      rollback(SBUF("Invalid price_rate"), 1);                                 \
     }                                                                          \
-                                                                               \
-    ADD_LIQUIDITY_FOR_RANGE(_currency_id, _price_range_id, _amount);           \
-                                                                               \
-    uint64_t _lp_token_amount =                                                \
-        CALCULATE_LP_TOKEN(_currency_id, _price_range_id, _amount);            \
-                                                                               \
-    EMIT_LP_TOKEN(_price_range_id, _lp_token_amount);                          \
-  } while (0)
+    price_rate_err = float_set(1, 0);                                          \
+  } else if (price_range == 1) {                                               \
+    price_rate_err = float_sum(                                                \
+        float_divide(tmp_price_rate, float_set(-2, 105)), float_set(0, -1));   \
+  } else {                                                                     \
+    price_rate_err =                                                           \
+        float_sum(float_divide(float_root(tmp_price_rate, price_range),        \
+                               float_set(-2, 105)),                            \
+                  float_set(0, -1));                                           \
+  }                                                                            \
+  /* price rate has to be within 0.001% error rate */                          \
+  if (float_compare(price_rate_err, float_set(-5, -1), COMPARE_LESS) == 1)     \
+    rollback(SBUF("Invalid price_rate"), 1);                                   \
+  if (float_compare(price_rate_err, float_set(-5, 1), COMPARE_GREATER) == 1)   \
+    rollback(SBUF("Invalid price_rate"), 1);
+
+#define UPDATE_LP_TOKENS(price_range_id, input_lp_token_amount)                \
+  ({                                                                           \
+    uint8_t _key[32] = {0};                                                    \
+    _key[0] = 2;                                                               \
+    _key[1] = price_range_id;                                                  \
+    char _lp_token_amount_buf[8];                                              \
+    int64_t _current_lp_token_amount;                                          \
+    if (state(SBUF(_lp_token_amount_buf), SBUF(_key)) !=                       \
+        sizeof(_current_lp_token_amount))                                      \
+      _current_lp_token_amount = 0;                                            \
+    else                                                                       \
+      _current_lp_token_amount = INT64_FROM_BUF(_lp_token_amount_buf);         \
+      _current_lp_token_amount = 0; \
+    _current_lp_token_amount += input_lp_token_amount;                         \
+    INT64_TO_BUF(_lp_token_amount_buf, _current_lp_token_amount);              \
+    if (state_set(SBUF(_lp_token_amount_buf), SBUF(_key)) !=                   \
+        sizeof(_current_lp_token_amount)) {                                    \
+      rollback(SBUF("Error: Could not store lp token amount state!"), 1);      \
+    }                                                                          \
+    TRACEVAR(_current_lp_token_amount);\
+  })
+
+#define MAKE_AND_EMIT_TX(otxn_accid, currency, issuer_accid, amount)           \
+  /*                                                                           \
+      Args:                                                                    \
+          otxn_accid: uint8_t*                                                 \
+          currency: uint8_t*                                                   \
+          issuer_accid: uint8_t*                                               \
+          amount: int64_t                                                      \
+      Return:                                                                  \
+          void                                                                 \
+  */                                                                           \
+  if (float_sto(SBUF(amt_out), SBUF(currency), SBUF(issuer_accid), amount,     \
+                amAMOUNT) < 0) {                                               \
+    rollback(SBUF("Error: Could not dump LP token amount into sto"),           \
+             NOT_AN_AMOUNT);                                                   \
+    break;                                                                     \
+  }                                                                            \
+  PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, (amt_out_ptr + 1), otxn_accid, 0,  \
+                                   0);                                         \
+  e = emit(SBUF(emithash), SBUF(txn_out));                                     \
+  if (e < 0) {                                                                 \
+    rollback(SBUF("Error: Failed to emit LP token!"), e);                      \
+    break;                                                                     \
+  }
 
 int64_t hook(uint32_t reserved) {
 
   etxn_reserve(2);
+  uint8_t emithash[32];
+  uint8_t amt_out[49];
+  uint8_t *amt_out_ptr = amt_out;
+  uint8_t txn_out[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
+  int64_t e;
   int64_t median_rate = float_set(0, 1);
 
   uint8_t otxn_accid[20];
@@ -103,7 +162,7 @@ int64_t hook(uint32_t reserved) {
   int equal = 0;
   BUFFER_EQUAL(equal, hook_accid, otxn_accid, 20);
   if (equal)
-    accept(SBUF("Peggy: Outgoing transaction"), 20);
+    accept(SBUF("Outgoing transaction"), 20);
 
   int64_t time = 0;
   uint8_t txq = 0;
@@ -133,32 +192,29 @@ int64_t hook(uint32_t reserved) {
   int64_t memo_len = otxn_field(SBUF(memo), sfMemos);
   int tx_type = GET_TRANSACTION_TYPE_FROM_MEMO(memo);
 
-  TRACEHEX(memo);
+  int64_t oslot = otxn_slot(0);
+  if (oslot < 0)
+    rollback(SBUF("Trade: Could not slot originating txn."), NO_FREE_SLOTS);
+  int64_t amt_slot = slot_subfield(oslot, sfAmount, 0);
+  if (amt_slot < 0)
+    rollback(SBUF("Trade: Could not slot otxn.sfAmount"), NO_FREE_SLOTS);
+  int64_t amt = slot_float(amt_slot);
+  if (amt < 0)
+    rollback(SBUF("Trade: Could not parse amount."), PARSE_ERROR);
+  int64_t amount_in = float_int(amt, 6, 0);
+  int64_t is_xrp = slot_type(amt_slot, 1);
+  if (is_xrp < 0)
+    rollback(SBUF("Trade: Could not determine sent amount type"), PARSE_ERROR);
+  if (is_xrp == 1)
+    rollback(SBUF("XRP is not allowed"), INVALID_ARGUMENT);
+
+  uint8_t amount_buffer[48];
+  if (slot(SBUF(amount_buffer), amt_slot) < 48)
+    rollback(SBUF("Trade: Could not dump sfAmount"), NOT_AN_AMOUNT);
+  uint8_t *currency_ptr = amount_buffer;
 
   switch (tx_type) {
   case DEPOSIT_TRANSACTION: {
-    // Originating tx
-    int64_t oslot = otxn_slot(0);
-    if (oslot < 0)
-      rollback(SBUF("Trade: Could not slot originating txn."), NO_FREE_SLOTS);
-    int64_t amt_slot = slot_subfield(oslot, sfAmount, 0);
-    if (amt_slot < 0)
-      rollback(SBUF("Trade: Could not slot otxn.sfAmount"), NO_FREE_SLOTS);
-    int64_t amt = slot_float(amt_slot);
-    if (amt < 0)
-      rollback(SBUF("Trade: Could not parse amount."), PARSE_ERROR);
-    int64_t amount_in = float_int(amt, 6, 0);
-    int64_t is_xrp = slot_type(amt_slot, 1);
-    if (is_xrp < 0)
-      rollback(SBUF("Trade: Could not determine sent amount type"),
-               PARSE_ERROR);
-    if (is_xrp == 1)
-      rollback(SBUF("XRP is not allowed"), INVALID_ARGUMENT);
-
-    uint8_t amount_buffer[48];
-    if (slot(SBUF(amount_buffer), amt_slot) < 48)
-      rollback(SBUF("Trade: Could not dump sfAmount"), NOT_AN_AMOUNT);
-    uint8_t *currency_ptr = amount_buffer;
     equal = 0;
     int c;
     for (c = 0; GUARD(2), c < 2 && equal != 1; ++c)
@@ -171,136 +227,27 @@ int64_t hook(uint32_t reserved) {
     uint8_t price_range_id = memo[14];
     uint8_t currency_id = currency_in;
 
-    uint8_t key[32] = {0};
-    key[0] = currency_id;
-    key[1] = price_range_id;
-
-    int64_t liquidity;
-    char liquidity_buf[8];
-    /* Get current liquidity */
-    if (state(SBUF(liquidity_buf), SBUF(key)) != sizeof(liquidity)) {
-      liquidity = 0;
-    } else {
-      liquidity = INT64_FROM_BUF(liquidity_buf);
-    }
-    /* Add new liquidity and store it to state */
-    liquidity += amount_in;
-    INT64_TO_BUF(liquidity_buf, liquidity);
-    if (state_set(SBUF(liquidity_buf), SBUF(key)) != sizeof(liquidity)) {
-      rollback(SBUF("Error: Could not store liquidity state!"), 1);
-    }
+    ADD_LIQUIDITY_FOR_RANGE(currency_id, price_range_id, amount_in);
 
     TRACEVAR(liquidity);
 
     // calculate lp tokens
     // lp tokens is relative to the liquidity provided
     int64_t price_rate =
-        (memo[23] << 24) + (memo[24] << 16) + (memo[25] << 8) + memo[26];
-    price_rate = float_set(-6, price_rate);
-
-    uint32_t price_range = (uint32_t)price_range_id;
-
-    int64_t tmp_price_rate = price_rate;
-    if (price_range < 127) {
-      tmp_price_rate = float_invert(tmp_price_rate);
-      price_range = 127 - price_range;
-    } else {
-      price_range = price_range - 127;
-    }
-
-    int64_t price_rate_err;
-    if (price_range == 0) {
-      if (float_compare(price_rate, float_one(), COMPARE_EQUAL) == 0) {
-        rollback(SBUF("Invalid price_rate"), 1);
-      }
-      price_rate_err = float_set(1, 0);
-    } else if (price_range == 1) {
-      price_rate_err = float_sum(
-          float_divide(tmp_price_rate, float_set(-2, 105)), float_set(0, -1));
-    } else {
-      price_rate_err =
-          float_sum(float_divide(float_root(tmp_price_rate, price_range),
-                                 float_set(-2, 105)),
-                    float_set(0, -1));
-    }
-
-    // price rate has to be within 0.1% error rate
-    if (float_compare(price_rate_err, float_set(-5, -1), COMPARE_LESS) == 1)
-      rollback(SBUF("Invalid price_rate"), 1);
-    if (float_compare(price_rate_err, float_set(-5, 1), COMPARE_GREATER) == 1)
-      rollback(SBUF("Invalid price_rate"), 1);
+        (memo)[23] << 24 | (memo)[24] << 16 | (memo)[25] << 8 | (memo)[26];
+    CHECK_PRICE_RATE(price_rate, price_range_id);
 
     int64_t lp_token_amount = float_set(-6, amount_in);
     if (currency_in == 1)
       lp_token_amount = float_multiply(lp_token_amount, price_rate);
 
-    uint8_t emithash[32];
-    uint8_t amt_out[49];
-    uint8_t *amt_out_ptr = amt_out;
-
     lp_currency[14] = price_range_id;
-    if (float_sto(SBUF(amt_out), SBUF(lp_currency), SBUF(hook_accid),
-                  lp_token_amount, amAMOUNT) < 0) {
-      rollback(SBUF("Error: Could not dump LP token amount into sto"),
-               NOT_AN_AMOUNT);
-      break;
-    }
-    uint8_t txn_out[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
+    MAKE_AND_EMIT_TX(otxn_accid, lp_currency, hook_accid, lp_token_amount);
 
-    PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, (amt_out_ptr + 1), otxn_accid, 0,
-                                     0);
-    int64_t e = emit(SBUF(emithash), SBUF(txn_out));
-    if (e < 0) {
-      rollback(SBUF("Error: Failed to emit LP token!"), e);
-      break;
-    }
-
-    // save total lp token amount
-    int64_t total_lp_amount;
-    char total_lp_amount_buf[8];
-    /* Get current total lp amount */
-    key[0] = 0;
-    key[2] = 1;
-    if (state(SBUF(total_lp_amount_buf), SBUF(key)) !=
-        sizeof(total_lp_amount)) {
-      total_lp_amount = 0;
-    } else {
-      total_lp_amount = INT64_FROM_BUF(total_lp_amount_buf);
-    }
-    /* Add and store it to state */
-    total_lp_amount += float_int(lp_token_amount, 6, 0);
-    INT64_TO_BUF(total_lp_amount_buf, total_lp_amount);
-    if (state_set(SBUF(total_lp_amount_buf), SBUF(key)) !=
-        sizeof(total_lp_amount)) {
-      rollback(SBUF("Error: Could not store total lp token amount state!"), 1);
-    }
-    TRACEVAR(total_lp_amount);
-
+    UPDATE_LP_TOKENS(price_range_id, float_int(lp_token_amount, 6, 0));
     break;
   }
   case SWAP_TRANSACTION: {
-    // Originating tx
-    int64_t oslot = otxn_slot(0);
-    if (oslot < 0)
-      rollback(SBUF("Trade: Could not slot originating txn."), NO_FREE_SLOTS);
-    int64_t amt_slot = slot_subfield(oslot, sfAmount, 0);
-    if (amt_slot < 0)
-      rollback(SBUF("Trade: Could not slot otxn.sfAmount"), NO_FREE_SLOTS);
-    int64_t amt = slot_float(amt_slot);
-    if (amt < 0)
-      rollback(SBUF("Trade: Could not parse amount."), PARSE_ERROR);
-    int64_t amount_in = float_int(amt, 6, 0);
-    int64_t is_xrp = slot_type(amt_slot, 1);
-    if (is_xrp < 0)
-      rollback(SBUF("Trade: Could not determine sent amount type"),
-               PARSE_ERROR);
-    if (is_xrp == 1)
-      rollback(SBUF("XRP is not allowed"), INVALID_ARGUMENT);
-
-    uint8_t amount_buffer[48];
-    if (slot(SBUF(amount_buffer), amt_slot) < 48)
-      rollback(SBUF("Trade: Could not dump sfAmount"), NOT_AN_AMOUNT);
-    uint8_t *currency_ptr = amount_buffer;
     equal = 0;
     int c;
     for (c = 0; GUARD(2), c < 2 && equal != 1; ++c)
@@ -315,8 +262,8 @@ int64_t hook(uint32_t reserved) {
 
     int64_t price_rate =
         (memo[23] << 24) + (memo[24] << 16) + (memo[25] << 8) + memo[26];
-    // fee is 1%
-    amt = float_mulratio(amt, 0, 990000, 1000000);
+    // fee is 0.1%
+    amt = float_mulratio(amt, 0, 999000, 1000000);
     price_rate = float_set(-6, price_rate);
 
     TRACEVAR(float_int(price_rate, 6, 0));
@@ -325,59 +272,15 @@ int64_t hook(uint32_t reserved) {
     if (currency_in == 0) {
       return_amount = float_multiply(amt, price_rate);
     } else {
-        return_amount = float_divide(amt, price_rate);
+      return_amount = float_divide(amt, price_rate);
     }
 
-    // emit txs for returning tokens
-    uint8_t emithash[32];
-    uint8_t amt_out[49];
-    uint8_t *amt_out_ptr = amt_out;
-    uint8_t txn_out[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
-    int64_t e;
-
-
-    if (float_sto(SBUF(amt_out), SBUF(currencies[currency_id]),
-                  SBUF(issuer_accids[currency_id]), return_amount,
-                  amAMOUNT) < 0) {
-      rollback(SBUF("Error: Could not dump LP token amount into sto"),
-               NOT_AN_AMOUNT);
-      break;
-    }
-
-    PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, (amt_out_ptr + 1), otxn_accid, 0,
-                                     0);
-    e = emit(SBUF(emithash), SBUF(txn_out));
-    if (e < 0) {
-      rollback(SBUF("Error: Failed to emit LP token!"), e);
-      break;
-    }
+    MAKE_AND_EMIT_TX(otxn_accid, currencies[currency_id],
+                     issuer_accids[currency_id], return_amount);
 
     break;
   }
   case WITHDRAW_TRANSACTION: {
-    // Originating tx
-    int64_t oslot = otxn_slot(0);
-    if (oslot < 0)
-      rollback(SBUF("Trade: Could not slot originating txn."), NO_FREE_SLOTS);
-    int64_t amt_slot = slot_subfield(oslot, sfAmount, 0);
-    if (amt_slot < 0)
-      rollback(SBUF("Trade: Could not slot otxn.sfAmount"), NO_FREE_SLOTS);
-    int64_t amt = slot_float(amt_slot);
-    if (amt < 0)
-      rollback(SBUF("Trade: Could not parse amount."), PARSE_ERROR);
-    int64_t amount_in = float_int(amt, 6, 0);
-    int64_t is_xrp = slot_type(amt_slot, 1);
-    if (is_xrp < 0)
-      rollback(SBUF("Trade: Could not determine sent amount type"),
-               PARSE_ERROR);
-    if (is_xrp == 1)
-      rollback(SBUF("XRP is not allowed"), INVALID_ARGUMENT);
-
-    uint8_t amount_buffer[48];
-    if (slot(SBUF(amount_buffer), amt_slot) < 48)
-      rollback(SBUF("Trade: Could not dump sfAmount"), NOT_AN_AMOUNT);
-    uint8_t *currency_ptr = amount_buffer;
-
     // check lp token currency
     equal = 0;
     lp_currency[14] = (currency_ptr + 8)[14];
@@ -414,13 +317,14 @@ int64_t hook(uint32_t reserved) {
 
     liquidity[1] = INT64_FROM_BUF(liquidity_buf);
 
-    key[0] = 0;
-    key[2] = 1;
+    key[0] = 2;
     char total_lp_amount_buf[8];
     int64_t total_lp_amount;
     if (state(SBUF(total_lp_amount_buf), SBUF(key)) != 8)
       rollback(SBUF("lp not found"), 0);
     total_lp_amount = INT64_FROM_BUF(total_lp_amount_buf);
+
+    TRACEVAR(total_lp_amount);
 
     // calculate lp token portion
     int64_t portion =
@@ -435,48 +339,12 @@ int64_t hook(uint32_t reserved) {
 
     TRACEVAR(float_int(portion, 6, 0));
     TRACEVAR(float_int(return_token_amount[1], 6, 0))
+
     // emit txs for returning tokens
-    uint8_t emithash[32];
-    uint8_t amt_out[49];
-    uint8_t *amt_out_ptr = amt_out;
-    uint8_t txn_out[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
-    int64_t e;
-
-    if (float_sto(SBUF(amt_out), SBUF(currencies[0]), SBUF(issuer_accids[0]),
-                  return_token_amount[0], amAMOUNT) < 0) {
-      rollback(SBUF("Error: Could not dump LP token amount into sto"),
-               NOT_AN_AMOUNT);
-      break;
-    }
-
-    PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out, (amt_out_ptr + 1), otxn_accid, 0,
-                                     0);
-    e = emit(SBUF(emithash), SBUF(txn_out));
-    if (e < 0) {
-      rollback(SBUF("Error: Failed to emit LP token!"), e);
-      break;
-    }
-
-    uint8_t emithash_[32];
-    uint8_t amt_out_[49];
-    uint8_t *amt_out_ptr_ = amt_out_;
-    uint8_t txn_out_[PREPARE_PAYMENT_SIMPLE_TRUSTLINE_SIZE];
-    int64_t e_;
-
-    if (float_sto(SBUF(amt_out_), SBUF(currencies[1]), SBUF(issuer_accids[1]),
-                  return_token_amount[1], amAMOUNT) < 0) {
-      rollback(SBUF("Error: Could not dump LP token amount into sto"),
-               NOT_AN_AMOUNT);
-      break;
-    }
-
-    PREPARE_PAYMENT_SIMPLE_TRUSTLINE(txn_out_, (amt_out_ptr_ + 1), otxn_accid,
-                                     0, 0);
-    e_ = emit(SBUF(emithash_), SBUF(txn_out_));
-    if (e_ < 0) {
-      rollback(SBUF("Error: Failed to emit LP token!"), e);
-      break;
-    }
+    MAKE_AND_EMIT_TX(otxn_accid, currencies[0], issuer_accids[0],
+                     return_token_amount[0]);
+    MAKE_AND_EMIT_TX(otxn_accid, currencies[1], issuer_accids[1],
+                     return_token_amount[1]);
 
     // remove from liquidity
     key[0] = 0;
@@ -486,6 +354,7 @@ int64_t hook(uint32_t reserved) {
     if (state_set(SBUF(liquidity_buf), SBUF(key)) != 8) {
       rollback(SBUF("Error: Could not store liquidity state!"), 1);
     }
+    key[0] = 1;
     liquidity[1] -= float_int(return_token_amount[1], 6, 0);
     INT64_TO_BUF(liquidity_buf, liquidity[1]);
     if (state_set(SBUF(liquidity_buf), SBUF(key)) != 8) {
