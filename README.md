@@ -142,8 +142,9 @@ In conclusion, as our team delves deeper into the development of our Decentraliz
 
 Our future plans encompass the following key enhancements:
 
-1. **Pathfinding Algorithm Enhancement:** We aim to integrate the concentrated liquidity pool into our pathfinding algorithm. This integration will empower users to discover the most favorable exchange rates seamlessly.
-2. **Automatic Pool Selection:** A new feature is on the horizon that fetches the internal price. With this feature in place, users can effortlessly engage with the pool that matches the current market price, ensuring a more intuitive trading experience.
-3. **Decentralized Fee Rate Voting:** To foster a democratic ecosystem, we plan to introduce a mechanism allowing users to vote on the pool's fee rate using LP Tokens. This initiative ensures that the fee structure remains transparent, fair, and in line with the community's preferences.
+1. **Backend & Frontend Integration**: We will add backend and frontend services to our project. It is **almost** finished but due to some issues, it is not functioning. You can check the feature/webpage branch for the source code and see the progression.
+2. **Pathfinding Algorithm Enhancement:** We aim to integrate the concentrated liquidity pool into our pathfinding algorithm. This integration will empower users to discover the most favorable exchange rates seamlessly.
+3. **Automatic Pool Selection:** A new feature is on the horizon that fetches the internal price. With this feature in place, users can effortlessly engage with the pool that matches the current market price, ensuring a more intuitive trading experience.
+4. **Decentralized Fee Rate Voting:** To foster a democratic ecosystem, we plan to introduce a mechanism allowing users to vote on the pool's fee rate using LP Tokens. This initiative ensures that the fee structure remains transparent, fair, and in line with the community's preferences.
 
 By introducing these features, we aim to position our DEX as a state-of-the-art platform that is not only user-friendly but also offers advanced functionalities tailored to the evolving needs of the crypto trading community.
