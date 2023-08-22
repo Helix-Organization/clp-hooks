@@ -1,0 +1,30 @@
+# Python Cache
+__pycache__/
+*.py[cod]
+
+# Packaging
+*.egg-info/
+dist/
+build/
+
+# Dependencies
+requirements.txt
+poetry.lock
+
+# IDEs / editors
+.vscode/
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*.swn
+.mypy_cache/
+
+# OS
+.DS_Store
+
+# Misc
+trash/
+
+# Secret
+.env
